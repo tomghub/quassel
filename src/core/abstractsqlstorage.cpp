@@ -53,18 +53,7 @@ QSqlDatabase AbstractSqlStorage::logDb()
     if (!_connectionPool.contains(QThread::currentThread()))
         addConnectionToPool();
 
-    QSqlDatabase db = QSqlDatabase::database(_connectionPool[QThread::currentThread()]->name());
-
-    if (!db.isOpen()) {
-        if (!db.open()) {
-            qWarning() << "Unable to reopen database" << displayName() << "for thread" << QThread::currentThread();
-            qWarning() << "-" << db.lastError().text();
-        } else {
-            initDbSession(db);
-        }
-    }
-
-    return db;
+    return QSqlDatabase::database(_connectionPool[QThread::currentThread()]->name());
 }
 
 
@@ -100,6 +89,10 @@ void AbstractSqlStorage::addConnectionToPool()
         db.setUserName(userName());
         db.setPassword(password());
     }
+
+    // moo
+    if (driverName() == "QMYSQL")
+        db.setConnectOptions("MYSQL_OPT_RECONNECT=1");
 
     if (!db.open()) {
         quWarning() << "Unable to open database" << displayName() << "for thread" << QThread::currentThread();

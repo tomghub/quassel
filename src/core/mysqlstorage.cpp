@@ -22,6 +22,8 @@
 
 #include <QtSql>
 
+#include <mysql/mysql.h>
+
 #include "logger.h"
 #include "network.h"
 #include "quassel.h"
@@ -33,6 +35,15 @@ MySqlStorage::MySqlStorage(QObject *parent)
 }
 
 MySqlStorage::~MySqlStorage() {
+}
+
+QSqlDatabase MySqlStorage::logDb() {
+  QSqlDatabase db = AbstractSqlStorage::logDb();
+  MYSQL *handle = *static_cast<MYSQL **>(db.driver()->handle().data());
+  if (handle && mysql_ping(handle)) {
+    qWarning() << "MySqlStorage::logDb(): Database connection failure."; 
+  }
+  return db;
 }
 
 AbstractSqlMigrationWriter *MySqlStorage::createMigrationWriter() {

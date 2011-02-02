@@ -114,6 +114,7 @@ protected:
   virtual bool updateSchemaVersion(int newVersion);
   virtual bool setupSchemaVersion(int version);
   void safeExec(QSqlQuery &query);
+  QSqlDatabase logDb();
 
   QSqlQuery executePreparedQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant &insertid);
   QSqlQuery executePreparedQuery(const QString &queryname, const QVariant &param, const QSqlDatabase &db, QVariant &insertid);
