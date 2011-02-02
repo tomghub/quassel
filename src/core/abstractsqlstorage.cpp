@@ -53,7 +53,18 @@ QSqlDatabase AbstractSqlStorage::logDb()
     if (!_connectionPool.contains(QThread::currentThread()))
         addConnectionToPool();
 
-    return QSqlDatabase::database(_connectionPool[QThread::currentThread()]->name());
+    QSqlDatabase db = QSqlDatabase::database(_connectionPool[QThread::currentThread()]->name());
+
+    if (!db.isOpen()) {
+        if (!db.open()) {
+            qWarning() << "Unable to reopen database" << displayName() << "for thread" << QThread::currentThread();
+            qWarning() << "-" << db.lastError().text();
+        } else {
+            initDbSession(db);
+        }
+    }
+
+    return db;
 }
 
 

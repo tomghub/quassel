@@ -7,3 +7,5 @@ CREATE TABLE backlog (
 	senderid integer NOT NULL REFERENCES sender (senderid) ON DELETE SET NULL,
 	message TEXT
 )
+DEFAULT CHARACTER SET utf8
+COLLATE utf8_bin

@@ -80,7 +80,8 @@ QVariantMap MySqlStorage::setupDefaults() const {
   return map;
 }
 
-void MySqlStorage::initDbSession(QSqlDatabase &) {
+void MySqlStorage::initDbSession(QSqlDatabase &db) {
+  db.exec("set character set utf8");
 }
 
 void MySqlStorage::setConnectionProperties(const QVariantMap &properties) {
