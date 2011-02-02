@@ -81,6 +81,8 @@ QVariantMap MySqlStorage::setupDefaults() const {
 }
 
 void MySqlStorage::initDbSession(QSqlDatabase &) {
+  // moo
+  QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
 }
 
 void MySqlStorage::setConnectionProperties(const QVariantMap &properties) {
