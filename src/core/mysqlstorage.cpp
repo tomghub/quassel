@@ -1219,7 +1219,6 @@ bool MySqlStorage::logMessage(Message &msg) {
       db.rollback();
       return false;
     }
-    insertid = logMessageQuery.lastInsertId();
   }
 
   MsgId msgId = insertid.toInt();
