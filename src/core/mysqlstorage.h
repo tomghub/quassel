@@ -115,8 +115,8 @@ protected:
   virtual bool setupSchemaVersion(int version);
   void safeExec(QSqlQuery &query);
 
-  QSqlQuery executePreparedQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant &insertid);
-  QSqlQuery executePreparedQuery(const QString &queryname, const QVariant &param, const QSqlDatabase &db, QVariant &insertid);
+  QSqlQuery executePreparedQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant &insertId);
+  QSqlQuery executePreparedQuery(const QString &queryname, const QVariant &param, const QSqlDatabase &db, QVariant &insertId);
   void deallocateQuery(const QString &queryname, const QSqlDatabase &db);
 
   inline void savePoint(const QString &handle, const QSqlDatabase &db) { db.exec(QString("SAVEPOINT %1").arg(handle)); }
@@ -126,7 +126,7 @@ protected:
 private:
   void bindNetworkInfo(QSqlQuery &query, const NetworkInfo &info);
   void bindServerInfo(QSqlQuery &query, const Network::Server &server);
-  QSqlQuery prepareAndExecuteQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant &insertid);
+  QSqlQuery prepareAndExecuteQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant &insertId);
 
   QString _hostName;
   int _port;

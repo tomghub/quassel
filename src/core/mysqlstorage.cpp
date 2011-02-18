@@ -1186,42 +1186,44 @@ bool MySqlStorage::logMessage(Message &msg) {
     return false;
   }
 
-  QVariant insertid;
+  QVariant insertId;
+  QSqlQuery getSenderIdQuery = executePreparedQuery("select_senderid", msg.sender(), db, insertId);
+  int senderId;
+  if(getSenderIdQuery.first()) {
+    senderId = getSenderIdQuery.value(0).toInt();
+  } else {
+    // it's possible that the sender was already added by another thread
+    // since the insert might fail we're setting a savepoint
+    savePoint("sender_sp1", db);
+    QSqlQuery addSenderQuery = executePreparedQuery("insert_sender", msg.sender(), db, insertId);
+
+    if(addSenderQuery.lastError().isValid()) {
+      rollbackSavePoint("sender_sp1", db);
+      getSenderIdQuery = executePreparedQuery("select_senderid", msg.sender(), db, insertId);
+      getSenderIdQuery.first();
+      senderId = getSenderIdQuery.value(0).toInt();
+    } else {
+      releaseSavePoint("sender_sp1", db);
+      senderId = insertId.toInt();
+    }
+  }
+
   QVariantList params;
   params << msg.timestamp()
 	 << msg.bufferInfo().bufferId().toInt()
 	 << msg.type()
 	 << (int)msg.flags()
-	 << msg.sender()
+	 << senderId
 	 << msg.contents();
-  QSqlQuery logMessageQuery = executePreparedQuery("insert_message", params, db, insertid);
+  QSqlQuery logMessageQuery = executePreparedQuery("insert_message", params, db, insertId);
 
-  if(logMessageQuery.lastError().isValid()) {
+  if(!watchQuery(logMessageQuery)) {
     // first we need to reset the transaction
     db.rollback();
-    db.transaction();
-
-    // it's possible that the sender was already added by another thread
-    // since the insert might fail we're setting a savepoint
-    savePoint("sender_sp1", db);
-    QVariant temp;
-    QSqlQuery addSenderQuery = executePreparedQuery("insert_sender", msg.sender(), db, temp);
-    if(addSenderQuery.lastError().isValid())
-      rollbackSavePoint("sender_sp1", db);
-    else
-      releaseSavePoint("sender_sp1", db);
-
-    logMessageQuery = executePreparedQuery("insert_message", params, db, insertid);
-    if(!watchQuery(logMessageQuery)) {
-      qDebug() << "==================== Sender Query:";
-      watchQuery(addSenderQuery);
-      qDebug() << "==================== /Sender Query";
-      db.rollback();
-      return false;
-    }
+    return false;
   }
 
-  MsgId msgId = insertid.toInt();
+  MsgId msgId = insertId.toInt();
   db.commit();
   if(msgId.isValid()) {
     msg.setMsgId(msgId);
@@ -1239,41 +1241,58 @@ bool MySqlStorage::logMessages(MessageList &msgs) {
     return false;
   }
 
-  QSet<QString> senders;
+  QVariant insertId;
+  QList<int> senderIdList;
+  QHash<QString, int> senderIds;
+  QSqlQuery addSenderQuery;
+  QSqlQuery selectSenderQuery;;
   for(int i = 0; i < msgs.count(); i++) {
     const QString &sender = msgs.at(i).sender();
-    if(senders.contains(sender))
+    if(senderIds.contains(sender)) {
+      senderIdList << senderIds[sender];
       continue;
-    senders << sender;
+    }
 
-    savePoint("sender_sp", db);
-    QVariant temp;
-    QSqlQuery addSenderQuery = executePreparedQuery("insert_sender", sender, db, temp);
-    if(addSenderQuery.lastError().isValid())
-      rollbackSavePoint("sender_sp", db);
-    else
-      releaseSavePoint("sender_sp", db);
+    selectSenderQuery = executePreparedQuery("select_senderid", sender, db, insertId);
+    if(selectSenderQuery.first()) {
+      senderIdList << selectSenderQuery.value(0).toInt();
+      senderIds[sender] = selectSenderQuery.value(0).toInt();
+    } else {
+      savePoint("sender_sp", db);
+      addSenderQuery= executePreparedQuery("insert_sender", sender, db, insertId);
+      if(addSenderQuery.lastError().isValid()) {
+        // seems it was inserted meanwhile... by a different thread
+        rollbackSavePoint("sender_sp", db);
+        selectSenderQuery = executePreparedQuery("select_senderid", sender, db, insertId);
+        selectSenderQuery.first();
+        senderIdList << selectSenderQuery.value(0).toInt();
+        senderIds[sender] = selectSenderQuery.value(0).toInt();
+      } else {
+        releaseSavePoint("sender_sp", db);
+        senderIdList << insertId.toInt();
+        senderIds[sender] = insertId.toInt();
+      }
+    }
   }
 
   // yes we loop twice over the same list. This avoids alternating queries.
   bool error = false;
   for(int i = 0; i < msgs.count(); i++) {
     Message &msg = msgs[i];
-    QVariant insertid;
     QVariantList params;
     params << msg.timestamp()
 	   << msg.bufferInfo().bufferId().toInt()
 	   << msg.type()
 	   << (int)msg.flags()
-	   << msg.sender()
+	   << senderIdList.at(i)
 	   << msg.contents();
-    QSqlQuery logMessageQuery = executePreparedQuery("insert_message", params, db, insertid);
+    QSqlQuery logMessageQuery = executePreparedQuery("insert_message", params, db, insertId);
     if(!watchQuery(logMessageQuery)) {
       db.rollback();
       error = true;
       break;
     } else {
-      msg.setMsgId(insertid.toInt());
+      msg.setMsgId(insertId.toInt());
     }
   }
 
@@ -1422,7 +1441,7 @@ QList<Message> MySqlStorage::requestAllMsgs(UserId user, MsgId first, MsgId last
 //   return;
 // }
 
-QSqlQuery MySqlStorage::prepareAndExecuteQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant &insertid) {
+QSqlQuery MySqlStorage::prepareAndExecuteQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant &insertId) {
   // Query preparing is done lazily. That means that instead of always checking if the query is already prepared
   // we just EXECUTE and catch the error
   QSqlDriver *driver = db.driver();
@@ -1470,31 +1489,29 @@ QSqlQuery MySqlStorage::prepareAndExecuteQuery(const QString &queryname, const Q
     }
     // we alwas execute the query again, even if the query was already prepared.
     // this ensures, that the error is properly propagated to the calling function
-    // (otherwise the lasst call would be the test select to pg_prepared_statements
-    // which always gives a proper result)
     if(params.isEmpty()) {
       query = db.exec(QString("EXECUTE quassel_%1").arg(queryname));
     } else {
       query = db.exec(QString("EXECUTE quassel_%1 USING %2").arg(queryname).arg(paramStrings.join(", ")));
     }
     
-    insertid = query.lastInsertId();
+    insertId = query.lastInsertId();
   } else {
-    insertid = query.lastInsertId();
+    insertId = query.lastInsertId();
     // only release the SAVEPOINT
     db.exec("RELEASE SAVEPOINT quassel_prepare_query");
   }
   return query;
 }
 
-QSqlQuery MySqlStorage::executePreparedQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant & insertid) {
-  return prepareAndExecuteQuery(queryname, params, db, insertid);
+QSqlQuery MySqlStorage::executePreparedQuery(const QString &queryname, const QVariantList &params, const QSqlDatabase &db, QVariant & insertId) {
+  return prepareAndExecuteQuery(queryname, params, db, insertId);
 }
 
-QSqlQuery MySqlStorage::executePreparedQuery(const QString &queryname, const QVariant &param, const QSqlDatabase &db, QVariant & insertid) {
+QSqlQuery MySqlStorage::executePreparedQuery(const QString &queryname, const QVariant &param, const QSqlDatabase &db, QVariant & insertId) {
   QVariantList params;
   params << param;
-  return prepareAndExecuteQuery(queryname, params, db, insertid);
+  return prepareAndExecuteQuery(queryname, params, db, insertId);
 }
 
 void MySqlStorage::deallocateQuery(const QString &queryname, const QSqlDatabase &db) {

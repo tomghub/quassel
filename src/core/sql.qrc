@@ -53,6 +53,7 @@
     <file>./SQL/MySQL/16/select_networks_for_user.sql</file>
     <file>./SQL/MySQL/16/select_nicks.sql</file>
     <file>./SQL/MySQL/16/select_persistent_channels.sql</file>
+    <file>./SQL/MySQL/16/select_senderid.sql</file>
     <file>./SQL/MySQL/16/select_servers_for_network.sql</file>
     <file>./SQL/MySQL/16/select_user_setting.sql</file>
     <file>./SQL/MySQL/16/select_userid.sql</file>
