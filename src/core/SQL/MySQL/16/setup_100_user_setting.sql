@@ -1,6 +1,7 @@
 CREATE TABLE user_setting (
-    userid integer NOT NULL REFERENCES quasseluser (userid) ON DELETE CASCADE,
+    userid bigint(20) unsigned NOT NULL,
     settingname VARCHAR(255) NOT NULL,
     settingvalue BLOB,
-    PRIMARY KEY (userid, settingname)
-)
+    PRIMARY KEY (userid, settingname),
+    CONSTRAINT user_setting_ibfk_1 FOREIGN KEY (userid) REFERENCES quasseluser (userid) ON DELETE CASCADE
+) ENGINE=InnoDB
