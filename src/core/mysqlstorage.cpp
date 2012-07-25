@@ -602,7 +602,7 @@ bool MySqlStorage::updateNetwork(UserId user, const NetworkInfo &info) {
     db.rollback();
     return false;
   }
-  if(updateQuery.numRowsAffected() != 1) {
+  if(updateQuery.numRowsAffected() > 1) { // MySQL will return 0 if the above query made no changes
     // seems this is not our network...
     db.rollback();
     return false;
